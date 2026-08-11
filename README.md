@@ -145,22 +145,31 @@ PYTHONPATH=src .venv/bin/python -m pytest tests -q
 
 Полезные команды: `make logs`, `make shell`, `make backup`, `make restart`.
 
-## Перенос на сервер
+## Сервер
 
-Конфигурация одна и та же, меняется только `.env`:
+Бот работает на VPS и обновляется сам: push в `main` → GitHub Actions гоняет тесты →
+сервер подтягивает изменения и пересобирает контейнер. Ручное вмешательство нужно
+только для `.env` — он в git не попадает.
+
+Ключи деплоя лежат в секретах репозитория (`DEPLOY_SSH_KEY`, `DEPLOY_HOST`,
+`DEPLOY_USER`). На сервере этот ключ привязан к forced command и умеет ровно одно —
+запустить `~/deploy.sh`; shell по нему получить нельзя. Репозиторий публичный,
+поэтому у workflow нет триггера `pull_request`: иначе через форк можно было бы
+добраться до секретов.
+
+Развернуть с нуля на новом сервере:
 
 ```bash
-scp -r "Arabic bot" user@server:~/arabic-bot
-ssh user@server
+git clone https://github.com/julijaschwarz/arabic-bot.git ~/arabic-bot
 cd ~/arabic-bot
 cp .env.example .env   # впишите BOT_TOKEN и ALLOWED_USER_IDS
 make up
 make warm-cache
 ```
 
-Бот сам поднимается после перезагрузки сервера (`restart: unless-stopped`).
-База и кэш лежат в томе `arabic-data` и переживают пересборку образа;
-`make backup` выгружает базу в `./backup`.
+Бот сам поднимается после перезагрузки (`restart: unless-stopped`). База и кэш лежат
+в томе `arabic-data` и переживают пересборку образа; `make backup` выгружает базу
+в `./backup`. На машине с 512 МБ памяти нужен swap — без него сборка образа уходит в OOM.
 
 ## Настройки
 
