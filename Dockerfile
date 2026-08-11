@@ -22,10 +22,8 @@ RUN pip install --upgrade pip setuptools wheel && pip install .
 # ---------- runtime ----------
 FROM python:3.12-slim AS runtime
 
-# ffmpeg — конвертация mp3 -> ogg/opus для голосовых сообщений
 # fonts-hosny-amiri — арабский шрифт для рендера картинок
 RUN apt-get update && apt-get install -y --no-install-recommends \
-        ffmpeg \
         fonts-hosny-amiri \
         fonts-dejavu-core \
         ca-certificates \
