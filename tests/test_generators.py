@@ -49,6 +49,53 @@ def test_generator_produces_self_consistent_exercises(generator, lexicon, rng):
 
 
 @pytest.mark.parametrize("generator", ALL_GENERATORS, ids=lambda g: g.id)
+def test_answers_are_case_insensitive_on_both_sides(generator, lexicon, rng):
+    """Регистр не должен решать ничего — ни со стороны пользователя, ни в базе.
+
+    Сравнение идёт со множеством `accepted`, а не через функцию, поэтому мало
+    того, что вход нормализуется: сами эталоны обязаны уже лежать в каноне.
+    Генератор, забывший прогнать свои варианты через normalize_answer, отдал бы
+    ответ, который невозможно набрать — «Зайн» не совпал бы с «зайн» никогда.
+    """
+    from arabic_bot.domain.normalize import normalize_answer
+
+    for _ in range(120):
+        ctx = GenContext(letters=tuple(rng.sample(L.LETTERS, 6)), lexicon=lexicon, rng=rng)
+        if not generator.can_generate(ctx):
+            continue
+        exercise = generator.generate(ctx)
+        if exercise is None:
+            continue
+
+        # Требование канона касается только сравнения по множеству: это TEXT и
+        # ответ целым словом в разборе. Остальные режимы сверяют иначе и эталон
+        # в каноне держать не обязаны: CHOICE нормализует обе стороны на месте,
+        # NUMBER разбирает число через parse_number (для него «226» — это 226,
+        # тогда как normalize_answer схлопнул бы удвоение до «26»), а разбор по
+        # буквам сверяет токены через resolve_candidates.
+        stored = list(exercise.payload.get("whole_word_accepted", ()))
+        if exercise.answer_mode is AnswerMode.TEXT:
+            stored += list(exercise.accepted)
+        for answer in stored:
+            assert answer == normalize_answer(answer), (
+                f"{generator.id}: эталон {answer!r} хранится не в каноне — "
+                f"нормализованный вход {normalize_answer(answer)!r} с ним не совпадёт"
+            )
+
+        # Кнопочные и числовые задания регистра не имеют: арабский глиф и цифры
+        # от .upper() не меняются. Проверяем там, где ответ набирают руками.
+        if exercise.answer_mode not in (AnswerMode.TEXT, AnswerMode.LETTER_SEQUENCE):
+            continue
+        for answer in exercise.accepted:
+            for variant in (answer.upper(), answer.title(), f"  {answer.upper()}  "):
+                verdict = check(exercise, variant)
+                assert verdict.correct, (
+                    f"{generator.id}: ответ {variant!r} отвергнут, хотя {answer!r} верен "
+                    f"({verdict.comment})"
+                )
+
+
+@pytest.mark.parametrize("generator", ALL_GENERATORS, ids=lambda g: g.id)
 def test_generator_rejects_nonsense(generator, lexicon, rng):
     for _ in range(60):
         ctx = GenContext(letters=tuple(rng.sample(L.LETTERS, 6)), lexicon=lexicon, rng=rng)
