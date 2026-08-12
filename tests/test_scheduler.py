@@ -109,6 +109,33 @@ async def test_nudge_is_not_repeated_too_soon(app, monkeypatch):
     assert not any("Пора повторить" in text for text in bot.texts())
 
 
+async def test_no_nudge_on_the_tick_after_the_daily_lesson(app, monkeypatch):
+    """Занятие ушло по расписанию — ближайшая проверка простоя молчит.
+
+    Пользователь, не ответивший на занятие, формально простаивает, и до этой
+    правки проверка присылала «Пора повторить» поверх нетронутого занятия:
+    рассылка и проверка — разные тики, а набор skip гасит дубль только внутри
+    одного. Особенно заметно с тихими часами до 09:00, когда первый свободный
+    слот для напоминания приходится как раз на тик после рассылки.
+    """
+    application, bot = app
+    await _set_activity(application, hours_ago=12)
+    _set_quiet(monkeypatch, False)
+    users = application.dispatcher.workflow_data["users"]
+    # Занятие за сегодня ещё не уходило, а час рассылки заведомо наступил.
+    await users.update(USER_ID, daily_time="00:00")
+    await application.database.conn.execute("UPDATE users SET last_daily_on = NULL")
+    await application.database.conn.commit()
+
+    await application.jobs.daily_session()
+    assert bot.texts(), "занятие дня должно было уйти"
+    bot.clear()
+
+    await application.jobs.idle_nudge()
+
+    assert not any("Пора повторить" in text for text in bot.texts())
+
+
 async def test_nudge_respects_notifications_switch(app, monkeypatch):
     application, bot = app
     await _set_activity(application, hours_ago=12)

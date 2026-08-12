@@ -142,6 +142,12 @@ class Jobs:
             try:
                 await self._send_lesson(user)
                 await self._users.mark_daily_sent(user.user_id, today)
+                # Занятие — это уже зов бота, поэтому таймер напоминаний идёт от
+                # него. Иначе следующая проверка простоя (а она приходит отдельным
+                # тиком, максимум через полчаса) видела бы «активности нет 6 часов»
+                # и слала «Пора повторить» поверх нетронутого занятия. Набора skip
+                # для этого мало: он гасит дубль только внутри одного тика.
+                await self._users.mark_nudged(user.user_id)
                 sent.add(user.user_id)
                 log.info("Занятие дня отправлено пользователю %s", user.user_id)
             except Exception:  # noqa: BLE001
